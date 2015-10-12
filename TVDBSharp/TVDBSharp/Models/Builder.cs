@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
 using TVDBSharp.Models.DAO;
@@ -59,12 +60,20 @@ namespace TVDBSharp.Models
             var shows = new List<Show>(results);
             var doc = _dataProvider.Search(query);
 
-            foreach (var element in doc.Descendants("Series").Take(results))
-            {
-                var id = int.Parse(element.GetXmlData("seriesid"));
-                var response = _dataProvider.GetShow(id);
-                shows.Add(new ShowBuilder(response).GetResult());
-            }
+            shows = doc.Root
+                .Elements("Series")
+                .Select(show => new ShowBuilder(
+                    _dataProvider.GetShow((int)show.Attribute("seriesid")))
+                    .GetResult())
+                .Take(results)
+                .ToList();
+
+            //foreach (var element in doc.Descendants("Series").Take(results))
+            //{
+            //    var id = int.Parse(element.GetXmlData("seriesid"));
+            //    var response = _dataProvider.GetShow(id);
+            //    shows.Add(new ShowBuilder(response).GetResult());
+            //}
 
             return shows;
         }
@@ -80,6 +89,39 @@ namespace TVDBSharp.Models
 
             public ShowBuilder(XDocument doc)
             {
+                _show = doc.Root
+                    .Elements("Series")
+                    .Select(show => new Show
+                    {
+                        Id = int.Parse(show.Attribute("id").ToString()),
+                        ImdbId = show.Attribute("IMDB_ID").ToString(),
+                        Name = show.Attribute("SeriesName").ToString(),
+                        Language = show.Attribute("Language").ToString(),
+                        Network = show.Attribute("Network").ToString(),
+                        Description = show.Attribute("Overview").ToString(),
+                        Rating = string.IsNullOrWhiteSpace(show.Attribute("Rating").ToString()) 
+                            ? (double?)null 
+                            : Convert.ToDouble(show.Attribute("Rating").ToString(), CultureInfo.InvariantCulture),
+                        RatingCount = string.IsNullOrWhiteSpace(show.Attribute("RatingCount").ToString())
+                            ? 0
+                            : Convert.ToInt32(show.Attribute("RatingCount").ToString()),
+                        Runtime = string.IsNullOrWhiteSpace(show.Attribute("Runtime").ToString())
+                            ? 0
+                            : Convert.ToInt32(show.Attribute("Runtime").ToString()),
+                        Banner = GetBannerUri(show.Attribute("banner").ToString()),
+                        Fanart = GetBannerUri(show.Attribute("fanart").ToString()),
+                        LastUpdated = string.IsNullOrWhiteSpace(show.Attribute("lastupdated").ToString())
+                            ? (long?)null
+                            : Convert.ToInt64(show.Attribute("lastupdated").ToString()),
+                        Poster = GetBannerUri(show.Attribute("poster").ToString()),
+                        Zap2ItID = show.Attribute("zap2it_id").ToString(),
+                        FirstAired = string.IsNullOrWhiteSpace(show.Attribute("FirstAired").ToString())
+                            ? (DateTime?)null
+                            : DateTime.ParseExact(show.Attribute("FirstAired").ToString(), "yyyy-MM-dd", CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal)
+                    })
+                    .FirstOrDefault();
+
+
                 _show = new Show();
                 _show.Id = int.Parse(doc.GetSeriesData("id"));
                 _show.ImdbId = doc.GetSeriesData("IMDB_ID");
